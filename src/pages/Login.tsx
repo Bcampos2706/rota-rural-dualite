@@ -92,7 +92,7 @@ export const Login = () => {
       try {
         // Atualizado para buscar pela coluna 'nome_categoria'
         const { data, error } = await supabase
-          .from('categories')
+          .from('categoria')
           .select('nome_categoria')
           .order('nome_categoria');
         
