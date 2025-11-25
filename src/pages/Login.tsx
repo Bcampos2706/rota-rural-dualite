@@ -286,13 +286,12 @@ export const Login = () => {
       <div className="mb-8 text-center">
         <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-100 p-2">
           <img 
-            src="https://i.ibb.co/67X3xfSV/Design-sem-nome-2.png" 
+            src="src/assets/logo_rota_rural.png" 
             alt="AgroMarket Logo" 
             className="w-full h-full object-contain"
           />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900">AgroMarket</h1>
-        <p className="text-sm text-gray-500">O marketplace do agronegócio</p>
+          <p className="text-sm text-gray-500">O marketplace do agronegócio</p>
       </div>
 
       {/* Main Card */}
