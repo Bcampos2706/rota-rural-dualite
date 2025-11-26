@@ -1,4 +1,4 @@
-export type UserRole = 'buyer' | 'supplier' | 'transporter';
+export type UserRole = 'buyer' | 'producer' | 'supplier';
 
 export interface Product {
   id: string;
@@ -16,30 +16,30 @@ export interface Address {
   city: string;
   state: string;
   cep: string;
-  is_default: boolean; // Changed to match DB snake_case convention or mapped
+  is_default: boolean;
 }
 
 export interface QuoteRequest {
   id: string;
-  buyerId: string; // Mapped from buyer_id
-  buyerName: string; // Mapped from profiles
+  buyerId: string;
+  buyerName: string;
   product: Product;
   quantity: number;
-  deliveryType: 'delivery' | 'pickup'; // Mapped from delivery_type
+  deliveryType: 'delivery' | 'pickup';
   radius: number;
   address?: string;
   status: 'open' | 'closed' | 'completed';
-  createdAt: string; // Mapped from created_at
+  createdAt: string;
   proposals: Proposal[];
 }
 
 export interface Proposal {
   id: string;
-  quoteId: string; // Mapped from quote_id
-  supplierId: string; // Mapped from supplier_id
-  supplierName: string; // Mapped from profiles
+  quoteId: string;
+  supplierId: string;
+  supplierName: string;
   price: number;
-  deliveryDate: string; // Mapped from delivery_date
+  deliveryDate: string;
   notes?: string;
   status: 'pending' | 'accepted' | 'rejected';
   attachment?: string;
@@ -55,7 +55,7 @@ export interface Message {
 }
 
 export interface Promotion {
-  id: number;
+  id: string;
   supplierId: string;
   supplierName: string;
   title: string;
@@ -74,7 +74,7 @@ export interface UserProfile {
   full_name: string;
   role: UserRole;
   company_name?: string;
-  document?: string; // CPF/CNPJ
+  document?: string;
   phone?: string;
   address?: string;
   branch?: string;

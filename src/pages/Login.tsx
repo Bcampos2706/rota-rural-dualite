@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useStore } from '../context/MockStore';
 import { 
   Mail, 
   Lock, 
@@ -8,7 +8,6 @@ import {
   EyeOff, 
   Tractor, 
   Store, 
-  Truck, 
   ArrowRight, 
   ChevronLeft, 
   CheckCircle2, 
@@ -19,15 +18,13 @@ import {
   MapPin, 
   Plus,
   Check,
-  AlertCircle,
-  Loader2
+  AlertCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 // --- Constants ---
 const BRANCHES = ["Matriz", "Filial Norte", "Filial Sul"];
 
-// Fallback categories in case DB is empty
 const FALLBACK_CATEGORIES = [
   "Auto Peças",
   "Casa Agropecuária",
@@ -41,6 +38,7 @@ const FALLBACK_CATEGORIES = [
 
 export const Login = () => {
   const navigate = useNavigate();
+  const { login, register } = useStore();
 
   // --- Global State ---
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
@@ -49,17 +47,13 @@ export const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // --- Data State ---
-  const [categoriesList, setCategoriesList] = useState<string[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
-
   // --- Login State ---
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
   // --- Register State ---
   const [registerStep, setRegisterStep] = useState(1);
-  const [userType, setUserType] = useState<'producer' | 'supplier' | 'transporter' | null>(null);
+  const [userType, setUserType] = useState<'producer' | 'supplier' | null>(null);
   
   // Form Data
   const [formData, setFormData] = useState({
@@ -78,42 +72,11 @@ export const Login = () => {
     birthDate: '',
     farmName: '',
     whatsapp: '',
-    accessLevel: 'buyer', // buyer | supplier
     
     // Supplier Specific
     companyName: '',
     companyCnpj: '',
   });
-
-  // --- Effects ---
-  useEffect(() => {
-    const fetchCategories = async () => {
-      setIsLoadingCategories(true);
-      try {
-        // Atualizado para buscar pela coluna 'nome_categoria'
-        const { data, error } = await supabase
-          .from('categoria')
-          .select('nome_categoria')
-          .order('nome_categoria');
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          setCategoriesList(data.map((c: any) => c.nome_categoria));
-        } else {
-          // Fallback if table is empty
-          setCategoriesList(FALLBACK_CATEGORIES);
-        }
-      } catch (error) {
-        console.error('Error fetching categories:', error);
-        setCategoriesList(FALLBACK_CATEGORIES);
-      } finally {
-        setIsLoadingCategories(false);
-      }
-    };
-
-    fetchCategories();
-  }, []);
 
   // --- Handlers ---
 
@@ -123,29 +86,21 @@ export const Login = () => {
     setErrorMsg('');
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: loginPassword,
-      });
+      // Simulação de Login Mock
+      // Se o email contiver "fornecedor" ou "supplier", loga como fornecedor
+      const role = loginEmail.toLowerCase().includes('fornecedor') || loginEmail.toLowerCase().includes('supplier') 
+        ? 'supplier' 
+        : 'buyer';
+      
+      await login(loginEmail, role);
 
-      if (error) throw error;
-
-      // Check profile role to redirect correctly
-      if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', data.user.id)
-          .single();
-        
-        if (profile?.role === 'supplier') {
-          navigate('/supplier');
-        } else {
-          navigate('/buyer');
-        }
+      if (role === 'supplier') {
+        navigate('/supplier');
+      } else {
+        navigate('/buyer');
       }
     } catch (error: any) {
-      setErrorMsg(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : error.message || 'Erro ao realizar login');
+      setErrorMsg('Erro ao realizar login');
     } finally {
       setIsLoading(false);
     }
@@ -155,12 +110,8 @@ export const Login = () => {
     e.preventDefault();
     
     // Validações básicas
-    if (!formData.email) {
-      setErrorMsg("O campo E-mail é obrigatório.");
-      return;
-    }
-    if (!formData.password) {
-      setErrorMsg("A senha é obrigatória.");
+    if (!formData.email || !formData.password) {
+      setErrorMsg("Preencha os campos obrigatórios.");
       return;
     }
     if (formData.password !== formData.confirmPassword) {
@@ -168,71 +119,19 @@ export const Login = () => {
       return;
     }
 
-    // Validações de campos obrigatórios para o Banco de Dados
-    if (!formData.phone) {
-      setErrorMsg("O telefone é obrigatório.");
-      return;
-    }
-    if (!formData.address) {
-      setErrorMsg("O endereço é obrigatório.");
-      return;
-    }
-    
-    const document = formData.cpfCnpj || formData.companyCnpj;
-    if (!document) {
-      setErrorMsg("O documento (CPF/CNPJ) é obrigatório.");
-      return;
-    }
-
     setIsLoading(true);
     setErrorMsg('');
 
     try {
-      // 1. Sign Up
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-            role: userType === 'producer' ? 'buyer' : 'supplier',
-            company_name: formData.companyName || formData.farmName,
-            phone: formData.phone,
-            document: document,
-            address: formData.address,
-            branch: formData.branch
-          }
-        }
+      await register({
+        ...formData,
+        role: userType
       });
-
-      if (error) throw error;
-
-      // 2. Atualização Manual do Perfil (Upsert seguro)
-      if (data.user) {
-        const role = userType === 'producer' ? 'buyer' : 'supplier';
-        
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: data.user.id,
-          email: formData.email,
-          role: role,
-          full_name: formData.fullName,
-          company_name: formData.companyName || formData.farmName,
-          document: document,
-          phone: formData.phone,
-          address: formData.address,
-          branch: formData.branch,
-          categories: formData.selectedCategories
-        });
-
-        if (profileError) {
-          console.error("Erro ao salvar detalhes do perfil:", profileError);
-        }
-      }
 
       setIsSuccessModalOpen(true);
     } catch (error: any) {
       console.error("Registration Error:", error);
-      setErrorMsg(error.message || 'Erro ao realizar cadastro');
+      setErrorMsg('Erro ao realizar cadastro.');
     } finally {
       setIsLoading(false);
     }
@@ -256,9 +155,7 @@ export const Login = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // --- Render Helpers ---
-
-  const renderUserTypeCard = (type: 'producer' | 'supplier' | 'transporter', icon: any, label: string, desc: string) => (
+  const renderUserTypeCard = (type: 'producer' | 'supplier', icon: any, label: string, desc: string) => (
     <button
       onClick={() => setUserType(type)}
       className={cn(
@@ -286,12 +183,13 @@ export const Login = () => {
       <div className="mb-8 text-center">
         <div className="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-100 p-2">
           <img 
-            src="src/assets/logo_rota_rural.png" 
+            src="https://i.ibb.co/67X3xfSV/Design-sem-nome-2.png" 
             alt="AgroMarket Logo" 
             className="w-full h-full object-contain"
           />
         </div>
-          <p className="text-sm text-gray-500">O marketplace do agronegócio!</p>
+        <h1 className="text-2xl font-bold text-gray-900">AgroMarket</h1>
+        <p className="text-sm text-gray-500">O marketplace do agronegócio</p>
       </div>
 
       {/* Main Card */}
@@ -339,7 +237,7 @@ export const Login = () => {
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 text-gray-400" size={18} />
                   <input 
-                    type="email" 
+                    type="text" 
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="seu@email.com"
@@ -347,6 +245,7 @@ export const Login = () => {
                     required
                   />
                 </div>
+                <p className="text-[10px] text-gray-400 mt-1 ml-1">Dica: use "fornecedor" no email para testar como Fornecedor</p>
               </div>
 
               <div>
@@ -367,11 +266,6 @@ export const Login = () => {
                     className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                <div className="text-right mt-2">
-                  <button type="button" className="text-xs font-bold text-emerald-600 hover:underline">
-                    Esqueceu sua senha?
                   </button>
                 </div>
               </div>
@@ -407,11 +301,8 @@ export const Login = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                       {renderUserTypeCard('producer', Tractor, 'Produtor Rural', 'Compre insumos e gerencie sua fazenda')}
-                    </div>
+                    {renderUserTypeCard('producer', Tractor, 'Produtor Rural', 'Compre insumos e gerencie sua fazenda')}
                     {renderUserTypeCard('supplier', Store, 'Fornecedor', 'Venda produtos e envie orçamentos')}
-                    {renderUserTypeCard('transporter', Truck, 'Transportadora', 'Realize entregas e fretes')}
                   </div>
 
                   <button 
@@ -437,7 +328,7 @@ export const Login = () => {
 
                   <div className="text-center mb-4">
                     <h2 className="font-bold text-lg text-gray-900">
-                      {userType === 'producer' ? 'Cadastro de Produtor' : userType === 'supplier' ? 'Cadastro de Fornecedor' : 'Cadastro de Transportadora'}
+                      {userType === 'producer' ? 'Cadastro de Produtor' : 'Cadastro de Fornecedor'}
                     </h2>
                     <p className="text-xs text-gray-500">Preencha seus dados para finalizar</p>
                   </div>
@@ -455,7 +346,7 @@ export const Login = () => {
                     )}
 
                     {/* --- SUPPLIER FIELDS --- */}
-                    {(userType === 'supplier' || userType === 'transporter') && (
+                    {userType === 'supplier' && (
                       <>
                         <InputGroup icon={Store} label="Nome da Empresa" name="companyName" value={formData.companyName} onChange={handleInputChange} placeholder="Razão Social" required />
                         <InputGroup icon={FileText} label="CNPJ" name="companyCnpj" value={formData.companyCnpj} onChange={handleInputChange} placeholder="00.000.000/0001-00" required />
@@ -491,34 +382,27 @@ export const Login = () => {
                       </div>
                     </div>
 
-                    {/* Areas of Interest (Dynamic from Supabase) */}
+                    {/* Areas of Interest */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-2 ml-1">Áreas de Interesse</label>
-                      
-                      {isLoadingCategories ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-500 p-2">
-                          <Loader2 size={16} className="animate-spin" /> Carregando categorias...
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          {categoriesList.map(cat => (
-                            <button
-                              key={cat}
-                              type="button"
-                              onClick={() => toggleCategory(cat)}
-                              className={cn(
-                                "text-[10px] font-bold px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1",
-                                formData.selectedCategories.includes(cat)
-                                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                                  : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                              )}
-                            >
-                              {formData.selectedCategories.includes(cat) && <Check size={10} />}
-                              {cat}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {FALLBACK_CATEGORIES.map(cat => (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => toggleCategory(cat)}
+                            className={cn(
+                              "text-[10px] font-bold px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1",
+                              formData.selectedCategories.includes(cat)
+                                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                            )}
+                          >
+                            {formData.selectedCategories.includes(cat) && <Check size={10} />}
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Password */}

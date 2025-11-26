@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../../context/MockStore';
+import { useStore } from '../../context/MockStore'; // Updated import
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, 
@@ -83,7 +83,7 @@ export const CreateQuote = () => {
   // Set default address if available
   useEffect(() => {
     if (deliveryType === 'delivery' && !address && addresses.length > 0) {
-      const defaultAddr = addresses.find(a => a.isDefault) || addresses[0];
+      const defaultAddr = addresses.find(a => a.is_default) || addresses[0];
       setAddress(`${defaultAddr.street}, ${defaultAddr.district}, ${defaultAddr.city} - ${defaultAddr.state}`);
     }
   }, [deliveryType, addresses]);
@@ -350,7 +350,7 @@ export const CreateQuote = () => {
                   <option value="" disabled>Selecione um endereço cadastrado</option>
                   {addresses.map((addr) => (
                     <option key={addr.id} value={`${addr.street}, ${addr.district}, ${addr.city} - ${addr.state}`}>
-                      {addr.label ? `${addr.label} - ` : ''}{addr.street}, {addr.city} {addr.isDefault ? '(Padrão)' : ''}
+                      {addr.label ? `${addr.label} - ` : ''}{addr.street}, {addr.city} {addr.is_default ? '(Padrão)' : ''}
                     </option>
                   ))}
                 </select>

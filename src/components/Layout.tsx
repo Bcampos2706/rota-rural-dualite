@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Home, PlusCircle, MessageSquare, User, ShoppingBag, FileText, Bell, MapPin, ChevronDown, ClipboardList } from 'lucide-react';
-import { useStore } from '../context/SupabaseContext'; // Changed to SupabaseContext
+import { useStore } from '../context/MockStore'; // Updated import
 import { cn } from '../lib/utils';
 
 export const Layout = () => {
@@ -9,7 +9,8 @@ export const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isBuyer = role === 'buyer';
+  // Atualizado para considerar 'producer' como comprador também
+  const isBuyer = role === 'buyer' || role === 'producer';
   const isDashboard = location.pathname === '/buyer';
 
   const navItems = isBuyer ? [
@@ -45,9 +46,7 @@ export const Layout = () => {
 
               {/* Right Actions */}
               <div className="flex items-center gap-3">
-                {/* Role Toggle Removed - Role is now fixed by Auth */}
-                
-                {/* Notification Bell (Only on Dashboard or generally visible) */}
+                {/* Notification Bell */}
                 <button className="relative p-2 hover:bg-white/10 rounded-full transition-colors">
                   <Bell size={20} />
                   <span className="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border border-emerald-600"></span>

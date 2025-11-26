@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { QuoteRequest, Product, Proposal, UserRole, Address, Promotion, UserProfile } from '../types';
-import { useNavigate } from 'react-router-dom';
 
 // --- Static Data for UI consistency ---
 const INITIAL_PRODUCTS: Product[] = [
@@ -13,7 +12,7 @@ const INITIAL_PRODUCTS: Product[] = [
 
 interface StoreContextType {
   role: UserRole;
-  setRole: (role: UserRole) => void; // Deprecated in real auth, kept for compatibility
+  setRole: (role: UserRole) => void;
   user: UserProfile | null;
   quotes: QuoteRequest[];
   products: Product[];
@@ -25,8 +24,11 @@ interface StoreContextType {
   acceptProposal: (quoteId: string, proposalId: string) => Promise<void>;
   finalizeOrder: (quoteId: string) => Promise<void>;
   addPromotion: (promo: any) => Promise<void>;
-  togglePromotionStatus: (id: number) => Promise<void>;
-  deletePromotion: (id: number) => Promise<void>;
+  togglePromotionStatus: (id: string) => Promise<void>;
+  deletePromotion: (id: string) => Promise<void>;
+  addAddress: (address: Omit<Address, 'id' | 'user_id'>) => Promise<void>;
+  deleteAddress: (id: string) => Promise<void>;
+  setDefaultAddress: (id: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -34,7 +36,7 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [role, setRole] = useState<UserRole>('buyer'); // Default fallback
+  const [role, setRole] = useState<UserRole>('buyer');
   const [quotes, setQuotes] = useState<QuoteRequest[]>([]);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -64,8 +66,6 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchQuotes = async () => {
     try {
-      // Fetch quotes with proposals and profiles (buyer/supplier names)
-      // Note: This is a simplified query. In production, you might need more specific joins.
       const { data: quotesData, error } = await supabase
         .from('quotes')
         .select(`
@@ -134,7 +134,7 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
       const { data, error } = await supabase
         .from('promotions')
         .select('*, profiles:supplier_id(company_name)')
-        .eq('is_active', true); // Fetch only active for buyers, logic might need adjustment for suppliers
+        .order('created_at', { ascending: false });
       
       if (error) throw error;
       
@@ -192,6 +192,7 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         setQuotes([]);
         setAddresses([]);
+        setPromotions([]);
       }
     });
 
@@ -251,7 +252,6 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
 
   const acceptProposal = async (quoteId: string, proposalId: string) => {
     try {
-      // 1. Update Quote Status
       const { error: quoteError } = await supabase
         .from('quotes')
         .update({ status: 'closed' })
@@ -259,7 +259,6 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
       
       if (quoteError) throw quoteError;
 
-      // 2. Update Proposal Status (Accepted)
       const { error: propError } = await supabase
         .from('proposals')
         .update({ status: 'accepted' })
@@ -267,7 +266,6 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
 
       if (propError) throw propError;
 
-      // 3. Reject others (Optional, can be done via DB trigger or manual update)
       await supabase
         .from('proposals')
         .update({ status: 'rejected' })
@@ -297,23 +295,118 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
 
   const addPromotion = async (promo: any) => {
     if (!user) return;
-    // Implementation for promotions...
-    // For now, just mocking the UI update as DB schema might vary
-    console.log("Adding promotion to DB", promo);
+    try {
+      const { error } = await supabase.from('promotions').insert({
+        supplier_id: user.id,
+        title: promo.title,
+        description: promo.description,
+        image_url: promo.image,
+        original_price: promo.originalPrice,
+        promo_price: promo.promoPrice,
+        start_date: promo.startDate,
+        end_date: promo.endDate,
+        is_active: promo.isActive
+      });
+
+      if (error) throw error;
+      await fetchPromotions();
+    } catch (error) {
+      console.error('Error adding promotion:', error);
+      alert('Erro ao criar promoção');
+    }
   };
 
-  const togglePromotionStatus = async (id: number) => {
-    // Implementation...
+  const togglePromotionStatus = async (id: string) => {
+    try {
+      const promo = promotions.find(p => p.id === id);
+      if (!promo) return;
+
+      const { error } = await supabase
+        .from('promotions')
+        .update({ is_active: !promo.isActive })
+        .eq('id', id);
+
+      if (error) throw error;
+      await fetchPromotions();
+    } catch (error) {
+      console.error('Error toggling promotion:', error);
+    }
   };
 
-  const deletePromotion = async (id: number) => {
-    // Implementation...
+  const deletePromotion = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('promotions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await fetchPromotions();
+    } catch (error) {
+      console.error('Error deleting promotion:', error);
+    }
+  };
+
+  const addAddress = async (address: Omit<Address, 'id' | 'user_id'>) => {
+    if (!user) return;
+    try {
+      // Se for o primeiro endereço ou marcado como padrão, remover padrão dos outros
+      if (address.is_default) {
+        await supabase
+          .from('addresses')
+          .update({ is_default: false })
+          .eq('user_id', user.id);
+      }
+
+      const { error } = await supabase.from('addresses').insert({
+        user_id: user.id,
+        ...address
+      });
+
+      if (error) throw error;
+      await fetchAddresses();
+    } catch (error) {
+      console.error('Error adding address:', error);
+      alert('Erro ao adicionar endereço');
+    }
+  };
+
+  const deleteAddress = async (id: string) => {
+    try {
+      const { error } = await supabase.from('addresses').delete().eq('id', id);
+      if (error) throw error;
+      await fetchAddresses();
+    } catch (error) {
+      console.error('Error deleting address:', error);
+    }
+  };
+
+  const setDefaultAddress = async (id: string) => {
+    if (!user) return;
+    try {
+      // Remove default from all
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', user.id);
+
+      // Set new default
+      const { error } = await supabase
+        .from('addresses')
+        .update({ is_default: true })
+        .eq('id', id);
+
+      if (error) throw error;
+      await fetchAddresses();
+    } catch (error) {
+      console.error('Error setting default address:', error);
+    }
   };
 
   return (
     <StoreContext.Provider value={{ 
       role, 
-      setRole: () => {}, // No-op
+      setRole: () => {}, 
       user, 
       quotes, 
       products: INITIAL_PRODUCTS, 
@@ -327,6 +420,9 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
       addPromotion, 
       togglePromotionStatus, 
       deletePromotion,
+      addAddress,
+      deleteAddress,
+      setDefaultAddress,
       refreshData
     }}>
       {children}

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { QuoteRequest, Product, Proposal, UserRole, Address, Promotion } from '../types';
+import { QuoteRequest, Product, Proposal, UserRole, Address, Promotion, UserProfile } from '../types';
 
-// Dados iniciais simulados
+// --- DADOS INICIAIS (MOCK) ---
+
 const INITIAL_PRODUCTS: Product[] = [
   { id: '1', name: 'Semente de Soja Intacta', category: 'Sementes', unit: 'kg' },
   { id: '2', name: 'Adubo NPK 04-14-08', category: 'Fertilizantes', unit: 'ton' },
@@ -24,10 +25,11 @@ const INITIAL_QUOTES: QuoteRequest[] = [
     proposals: [
       {
         id: 'p1',
+        quoteId: '101',
         supplierId: 'sup-1',
         supplierName: 'AgroTop Insumos',
         price: 25000,
-        deliveryDate: '2023-11-15',
+        deliveryDate: '5 dias úteis',
         status: 'pending',
       }
     ]
@@ -40,15 +42,17 @@ const INITIAL_QUOTES: QuoteRequest[] = [
     quantity: 200,
     deliveryType: 'pickup',
     radius: 100,
-    status: 'closed', // Pedido fechado (proposta aceita)
+    address: '',
+    status: 'closed',
     createdAt: new Date(Date.now() - 86400000).toISOString(),
     proposals: [
         {
             id: 'p2',
+            quoteId: '102',
             supplierId: 'sup-2',
             supplierName: 'Casa do Agricultor',
             price: 12500,
-            deliveryDate: '2023-11-10',
+            deliveryDate: 'Imediata',
             status: 'accepted'
         }
     ]
@@ -58,40 +62,28 @@ const INITIAL_QUOTES: QuoteRequest[] = [
 const INITIAL_ADDRESSES: Address[] = [
   {
     id: 'addr1',
-    label: 'Sede Principal',
     street: 'Rodovia BR-163, km 20',
     district: 'Zona Rural',
     city: 'Sorriso',
     state: 'MT',
     cep: '78890-000',
-    isDefault: true
+    is_default: true
   },
   {
     id: 'addr2',
-    label: 'Retiro São João',
-    street: 'Estrada Vicinal 4, km 12',
-    district: 'Zona Rural',
-    city: 'Sorriso',
-    state: 'MT',
-    cep: '78890-000',
-    isDefault: false
-  },
-  {
-    id: 'addr3',
-    label: 'Escritório Central',
     street: 'Av. Blumenau, 1500',
     district: 'Centro',
     city: 'Sorriso',
     state: 'MT',
     cep: '78890-000',
-    isDefault: false
+    is_default: false
   }
 ];
 
 const INITIAL_PROMOTIONS: Promotion[] = [
   {
-    id: 1,
-    supplierId: 'sup-1',
+    id: '1',
+    supplierId: 'user-supplier',
     supplierName: 'AgroTop Insumos',
     title: "Desconto em Sementes de Soja",
     description: "Sementes tratadas com alto vigor para a safra 23/24.",
@@ -99,12 +91,12 @@ const INITIAL_PROMOTIONS: Promotion[] = [
     originalPrice: 450.00,
     promoPrice: 380.00,
     startDate: "2023-11-01",
-    endDate: "2023-11-30",
+    endDate: "2025-12-30",
     isActive: true
   },
   {
-    id: 2,
-    supplierId: 'sup-1',
+    id: '2',
+    supplierId: 'user-supplier',
     supplierName: 'AgroTop Insumos',
     title: "Kit Fertilizante Foliar",
     description: "Compre 10 leve 12. Oferta por tempo limitado.",
@@ -114,77 +106,151 @@ const INITIAL_PROMOTIONS: Promotion[] = [
     startDate: "2023-10-01",
     endDate: "2023-10-15",
     isActive: false
-  },
-  {
-    id: 3,
-    supplierId: 'sup-2',
-    supplierName: 'Sementes Ouro Verde',
-    title: "Milho Híbrido Alta Performance",
-    description: "Resistência superior a pragas e seca. Saco de 60.000 sementes.",
-    image: "https://images.unsplash.com/photo-1551754655-cd27e38d2076?auto=format&fit=crop&q=80&w=300&h=200",
-    originalPrice: 500.00,
-    promoPrice: 450.00,
-    startDate: "2023-11-10",
-    endDate: "2023-12-10",
-    isActive: true
   }
 ];
 
-// Dados do Usuário Mockados
-const INITIAL_USER = {
-  name: 'Bruno Ferreira Campos',
+const MOCK_USER_BUYER: UserProfile = {
+  id: 'user-buyer',
+  email: 'produtor@exemplo.com',
+  full_name: 'Bruno Ferreira Campos',
+  role: 'buyer',
+  phone: '(66) 9999-9999',
   address: 'Rodovia BR-163, km 20, Sorriso - MT',
-  avatar: 'BF'
+  categories: ['Sementes', 'Defensivos']
 };
+
+const MOCK_USER_SUPPLIER: UserProfile = {
+  id: 'user-supplier',
+  email: 'fornecedor@exemplo.com',
+  full_name: 'João Silva',
+  role: 'supplier',
+  company_name: 'AgroTop Insumos Ltda',
+  branch: 'Matriz - Sorriso/MT',
+  phone: '(66) 3333-3333',
+  document: '00.000.000/0001-00'
+};
+
+// --- INTERFACE DO CONTEXTO ---
 
 interface StoreContextType {
   role: UserRole;
   setRole: (role: UserRole) => void;
-  user: typeof INITIAL_USER;
+  user: UserProfile | null;
   quotes: QuoteRequest[];
   products: Product[];
   addresses: Address[];
   promotions: Promotion[];
-  addQuote: (quote: Omit<QuoteRequest, 'id' | 'createdAt' | 'proposals' | 'buyerId' | 'buyerName'>) => void;
-  addProposal: (quoteId: string, proposal: Omit<Proposal, 'id' | 'supplierId' | 'supplierName' | 'status'>) => void;
-  acceptProposal: (quoteId: string, proposalId: string) => void;
-  finalizeOrder: (quoteId: string) => void;
-  addPromotion: (promo: Omit<Promotion, 'id' | 'supplierId' | 'supplierName'>) => void;
-  togglePromotionStatus: (id: number) => void;
-  deletePromotion: (id: number) => void;
+  isLoading: boolean;
+  
+  // Auth Actions
+  login: (email: string, role: UserRole) => Promise<void>;
+  register: (userData: any) => Promise<void>;
+  logout: () => void;
+  
+  // Data Actions
+  addQuote: (quote: any) => Promise<void>;
+  addProposal: (quoteId: string, proposal: any) => Promise<void>;
+  acceptProposal: (quoteId: string, proposalId: string) => Promise<void>;
+  finalizeOrder: (quoteId: string) => Promise<void>;
+  
+  addPromotion: (promo: any) => Promise<void>;
+  togglePromotionStatus: (id: string) => Promise<void>;
+  deletePromotion: (id: string) => Promise<void>;
+  
+  addAddress: (address: any) => Promise<void>;
+  deleteAddress: (id: string) => Promise<void>;
+  setDefaultAddress: (id: string) => Promise<void>;
+  
+  refreshData: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<UserRole>('buyer');
-  const [user] = useState(INITIAL_USER);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [quotes, setQuotes] = useState<QuoteRequest[]>(INITIAL_QUOTES);
-  const [products] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [addresses] = useState<Address[]>(INITIAL_ADDRESSES);
+  const [addresses, setAddresses] = useState<Address[]>(INITIAL_ADDRESSES);
   const [promotions, setPromotions] = useState<Promotion[]>(INITIAL_PROMOTIONS);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const addQuote = (quoteData: any) => {
+  // --- ACTIONS ---
+
+  const login = async (email: string, userRole: UserRole) => {
+    setIsLoading(true);
+    // Simula delay de rede
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    if (userRole === 'supplier') {
+      setUser(MOCK_USER_SUPPLIER);
+      setRole('supplier');
+    } else {
+      setUser(MOCK_USER_BUYER);
+      setRole('buyer'); // Producer é tratado como Buyer na lógica de role
+    }
+    setIsLoading(false);
+  };
+
+  const register = async (userData: any) => {
+    setIsLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const newUser: UserProfile = {
+      id: `user-${Date.now()}`,
+      email: userData.email,
+      full_name: userData.fullName,
+      role: userData.role,
+      company_name: userData.companyName || userData.farmName,
+      phone: userData.phone,
+      address: userData.address,
+      branch: userData.branch,
+      categories: userData.selectedCategories
+    };
+
+    setUser(newUser);
+    setRole(userData.role === 'producer' ? 'buyer' : 'supplier');
+    setIsLoading(false);
+  };
+
+  const logout = () => {
+    setUser(null);
+    setRole('buyer');
+  };
+
+  const addQuote = async (quoteData: any) => {
     const newQuote: QuoteRequest = {
-      ...quoteData,
       id: Math.random().toString(36).substr(2, 9),
-      buyerId: 'user-buyer',
-      buyerName: 'Fazenda Santa Fé',
-      createdAt: new Date().toISOString(),
-      proposals: [],
+      buyerId: user?.id || 'user-buyer',
+      buyerName: user?.full_name || 'Usuário',
+      product: {
+        id: quoteData.product.id,
+        name: quoteData.product.name,
+        category: quoteData.product.category,
+        unit: quoteData.product.unit
+      },
+      quantity: quoteData.quantity,
+      deliveryType: quoteData.deliveryType,
+      radius: quoteData.radius,
+      address: quoteData.address,
       status: 'open',
+      createdAt: new Date().toISOString(),
+      proposals: []
     };
     setQuotes([newQuote, ...quotes]);
   };
 
-  const addProposal = (quoteId: string, proposalData: any) => {
+  const addProposal = async (quoteId: string, proposalData: any) => {
     setQuotes(prev => prev.map(q => {
       if (q.id === quoteId) {
         const newProposal: Proposal = {
-          ...proposalData,
           id: Math.random().toString(36).substr(2, 9),
-          supplierId: 'user-supplier',
-          supplierName: 'AgroTop Insumos Ltda',
+          quoteId: quoteId,
+          supplierId: user?.id || 'user-supplier',
+          supplierName: user?.company_name || 'Fornecedor Mock',
+          price: proposalData.price,
+          deliveryDate: proposalData.deliveryDate,
+          notes: proposalData.notes,
+          attachment: proposalData.attachment,
           status: 'pending',
         };
         return { ...q, proposals: [...q.proposals, newProposal] };
@@ -193,7 +259,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
-  const acceptProposal = (quoteId: string, proposalId: string) => {
+  const acceptProposal = async (quoteId: string, proposalId: string) => {
     setQuotes(prev => prev.map(q => {
       if (q.id === quoteId) {
         return {
@@ -209,7 +275,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
-  const finalizeOrder = (quoteId: string) => {
+  const finalizeOrder = async (quoteId: string) => {
     setQuotes(prev => prev.map(q => {
       if (q.id === quoteId) {
         return { ...q, status: 'completed' };
@@ -218,29 +284,68 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     }));
   };
 
-  const addPromotion = (promo: Omit<Promotion, 'id' | 'supplierId' | 'supplierName'>) => {
+  const addPromotion = async (promo: any) => {
     const newPromo: Promotion = {
-        ...promo,
-        id: Date.now(),
-        supplierId: 'user-supplier',
-        supplierName: 'AgroTop Insumos Ltda' // Mocked current user company
+        id: Math.random().toString(36).substr(2, 9),
+        supplierId: user?.id || 'user-supplier',
+        supplierName: user?.company_name || 'Fornecedor Mock',
+        title: promo.title,
+        description: promo.description,
+        image: promo.image,
+        originalPrice: promo.originalPrice,
+        promoPrice: promo.promoPrice,
+        startDate: promo.startDate,
+        endDate: promo.endDate,
+        isActive: promo.isActive
     };
     setPromotions([newPromo, ...promotions]);
   };
 
-  const togglePromotionStatus = (id: number) => {
+  const togglePromotionStatus = async (id: string) => {
     setPromotions(prev => prev.map(p => p.id === id ? { ...p, isActive: !p.isActive } : p));
   };
 
-  const deletePromotion = (id: number) => {
+  const deletePromotion = async (id: string) => {
     setPromotions(prev => prev.filter(p => p.id !== id));
+  };
+
+  const addAddress = async (address: any) => {
+    const newAddr: Address = {
+      id: Math.random().toString(36).substr(2, 9),
+      user_id: user?.id,
+      ...address
+    };
+    
+    if (newAddr.is_default) {
+      setAddresses(prev => prev.map(a => ({ ...a, is_default: false })).concat(newAddr));
+    } else {
+      setAddresses(prev => [...prev, newAddr]);
+    }
+  };
+
+  const deleteAddress = async (id: string) => {
+    setAddresses(prev => prev.filter(a => a.id !== id));
+  };
+
+  const setDefaultAddress = async (id: string) => {
+    setAddresses(prev => prev.map(a => ({
+      ...a,
+      is_default: a.id === id
+    })));
+  };
+
+  const refreshData = async () => {
+    // Mock refresh
   };
 
   return (
     <StoreContext.Provider value={{ 
-      role, setRole, user, quotes, products, addresses, promotions,
+      role, setRole, user, quotes, products: INITIAL_PRODUCTS, addresses, promotions, isLoading,
+      login, register, logout,
       addQuote, addProposal, acceptProposal, finalizeOrder,
-      addPromotion, togglePromotionStatus, deletePromotion
+      addPromotion, togglePromotionStatus, deletePromotion,
+      addAddress, deleteAddress, setDefaultAddress,
+      refreshData
     }}>
       {children}
     </StoreContext.Provider>

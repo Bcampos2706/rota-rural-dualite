@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../../context/MockStore';
+import { useStore } from '../../context/MockStore'; // Updated import
 import { 
   Search, 
   Wrench, 
