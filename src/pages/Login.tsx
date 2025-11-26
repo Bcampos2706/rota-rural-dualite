@@ -291,7 +291,7 @@ export const Login = () => {
             className="w-full h-full object-contain"
           />
         </div>
-          <p className="text-sm text-gray-500">O marketplace do agronegócio</p>
+          <p className="text-sm text-gray-500">O marketplace do agronegócio!</p>
       </div>
 
       {/* Main Card */}
