@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../context/MockStore';
+import { useStore } from '../context/SupabaseContext';
 import { 
   Mail, 
   Lock, 
@@ -21,24 +21,14 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 // --- Constants ---
 const BRANCHES = ["Matriz", "Filial Norte", "Filial Sul"];
 
-const FALLBACK_CATEGORIES = [
-  "Auto Peças",
-  "Casa Agropecuária",
-  "Ferragens",
-  "Materiais de Construção",
-  "Peças Agrícolas",
-  "Sementes",
-  "Veterinária",
-  "Nutrição Animal"
-];
-
 export const Login = () => {
   const navigate = useNavigate();
-  const { login, register } = useStore();
+  const { register } = useStore();
 
   // --- Global State ---
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
@@ -46,6 +36,7 @@ export const Login = () => {
   const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
 
   // --- Login State ---
   const [loginEmail, setLoginEmail] = useState('');
@@ -54,6 +45,7 @@ export const Login = () => {
   // --- Register State ---
   const [registerStep, setRegisterStep] = useState(1);
   const [userType, setUserType] = useState<'producer' | 'supplier' | null>(null);
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
   
   // Form Data
   const [formData, setFormData] = useState({
@@ -78,6 +70,37 @@ export const Login = () => {
     companyCnpj: '',
   });
 
+  // --- Fetch Categories from Supabase ---
+  const fetchCategories = async () => {
+    setIsLoadingCategories(true);
+    try {
+      const { data, error } = await supabase
+        .from('categoria')
+        .select('nome_categoria')
+        .order('nome_categoria');
+      
+      if (error) throw error;
+      if (data) {
+        setCategoriesList(data.map((item: any) => item.nome_categoria));
+      }
+    } catch (error) {
+      console.error('Erro ao buscar categorias:', error);
+      setCategoriesList([
+        "Auto Peças", "Casa Agropecuária", "Ferragens", 
+        "Materiais de Construção", "Peças Agrícolas", 
+        "Sementes", "Veterinária"
+      ]);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'register' && registerStep === 2) {
+      fetchCategories();
+    }
+  }, [activeTab, registerStep]);
+
   // --- Handlers ---
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -86,21 +109,50 @@ export const Login = () => {
     setErrorMsg('');
 
     try {
-      // Simulação de Login Mock
-      // Se o email contiver "fornecedor" ou "supplier", loga como fornecedor
-      const role = loginEmail.toLowerCase().includes('fornecedor') || loginEmail.toLowerCase().includes('supplier') 
-        ? 'supplier' 
-        : 'buyer';
-      
-      await login(loginEmail, role);
+      // 1. Autenticação
+      const { data: { user }, error: loginError } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword
+      });
 
+      if (loginError) throw loginError;
+      if (!user) throw new Error("Usuário não encontrado.");
+
+      // 2. Verificação de Perfil (Tenta Produtor, depois Fornecedor)
+      let role = 'buyer';
+      
+      const { data: producer } = await supabase
+        .from('profile_produtor')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+      if (producer) {
+        role = 'producer';
+      } else {
+        const { data: supplier } = await supabase
+          .from('profile_fornecedor')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+        
+        if (supplier) role = 'supplier';
+      }
+
+      // 3. Redirecionamento
       if (role === 'supplier') {
         navigate('/supplier');
       } else {
         navigate('/buyer');
       }
+
     } catch (error: any) {
-      setErrorMsg('Erro ao realizar login');
+      console.error(error);
+      if (error.message === "Invalid login credentials") {
+         setErrorMsg('E-mail ou senha incorretos.');
+      } else {
+         setErrorMsg('Erro ao realizar login. Tente novamente.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -109,7 +161,6 @@ export const Login = () => {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validações básicas
     if (!formData.email || !formData.password) {
       setErrorMsg("Preencha os campos obrigatórios.");
       return;
@@ -119,19 +170,43 @@ export const Login = () => {
       return;
     }
 
+    if (!formData.phone) {
+       setErrorMsg("O telefone é obrigatório.");
+       return;
+    }
+    if (!formData.address) {
+       setErrorMsg("O endereço é obrigatório.");
+       return;
+    }
+    const document = formData.cpfCnpj || formData.companyCnpj;
+    if (!document) {
+       setErrorMsg("O documento (CPF/CNPJ) é obrigatório.");
+       return;
+    }
+
     setIsLoading(true);
     setErrorMsg('');
 
     try {
+      // Limpa formatação de documentos/telefone
+      const cleanDocument = document.replace(/\D/g, '');
+      const cleanPhone = formData.phone.replace(/\D/g, '');
+      const cleanWhatsapp = formData.whatsapp.replace(/\D/g, '');
+
+      // Envia para o Contexto (que chama o Supabase Auth)
       await register({
         ...formData,
-        role: userType
+        cpfCnpj: cleanDocument,
+        companyCnpj: cleanDocument,
+        phone: cleanPhone,
+        whatsapp: cleanWhatsapp,
+        role: userType // 'producer' ou 'supplier'
       });
 
       setIsSuccessModalOpen(true);
     } catch (error: any) {
       console.error("Registration Error:", error);
-      setErrorMsg('Erro ao realizar cadastro.');
+      setErrorMsg('Erro ao realizar cadastro: ' + (error.message || 'Tente novamente.'));
     } finally {
       setIsLoading(false);
     }
@@ -245,7 +320,6 @@ export const Login = () => {
                     required
                   />
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1 ml-1">Dica: use "fornecedor" no email para testar como Fornecedor</p>
               </div>
 
               <div>
@@ -364,45 +438,51 @@ export const Login = () => {
                     
                     <InputGroup icon={MapPin} label="Endereço Completo" name="address" value={formData.address} onChange={handleInputChange} placeholder="Rua, Número, Cidade - UF" required />
 
-                    {/* Branch Selection */}
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 mb-1 ml-1">Filial</label>
-                      <div className="flex gap-2">
-                        <select 
-                          name="branch" 
-                          value={formData.branch} 
-                          onChange={handleInputChange}
-                          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-emerald-500 outline-none bg-white text-sm"
-                        >
-                          {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
-                        </select>
-                        <button type="button" className="bg-gray-100 p-3 rounded-xl text-gray-600 hover:bg-gray-200">
-                          <Plus size={20} />
-                        </button>
+                    {/* Branch Selection (Supplier Only) */}
+                    {userType === 'supplier' && (
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 mb-1 ml-1">Filial</label>
+                        <div className="flex gap-2">
+                          <select 
+                            name="branch" 
+                            value={formData.branch} 
+                            onChange={handleInputChange}
+                            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-emerald-500 outline-none bg-white text-sm"
+                          >
+                            {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                          </select>
+                          <button type="button" className="bg-gray-100 p-3 rounded-xl text-gray-600 hover:bg-gray-200">
+                            <Plus size={20} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Areas of Interest */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-2 ml-1">Áreas de Interesse</label>
-                      <div className="flex flex-wrap gap-2">
-                        {FALLBACK_CATEGORIES.map(cat => (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => toggleCategory(cat)}
-                            className={cn(
-                              "text-[10px] font-bold px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1",
-                              formData.selectedCategories.includes(cat)
-                                ? "bg-emerald-100 text-emerald-700 border-emerald-200"
-                                : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                            )}
-                          >
-                            {formData.selectedCategories.includes(cat) && <Check size={10} />}
-                            {cat}
-                          </button>
-                        ))}
-                      </div>
+                      {isLoadingCategories ? (
+                        <div className="text-xs text-gray-500">Carregando categorias...</div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {categoriesList.map(cat => (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={() => toggleCategory(cat)}
+                              className={cn(
+                                "text-[10px] font-bold px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1",
+                                formData.selectedCategories.includes(cat)
+                                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                                  : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                              )}
+                            >
+                              {formData.selectedCategories.includes(cat) && <Check size={10} />}
+                              {cat}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Password */}

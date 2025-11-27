@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { StoreProvider } from './context/MockStore'; // Reverted to MockStore
+import { SupabaseProvider } from './context/SupabaseContext'; // Conectando ao Supabase
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { BuyerDashboard } from './pages/buyer/BuyerDashboard';
@@ -19,7 +19,7 @@ import { MyAddresses } from './pages/profile/MyAddresses';
 
 function App() {
   return (
-    <StoreProvider>
+    <SupabaseProvider>
       <BrowserRouter>
         <Routes>
           {/* Login Route (Outside Layout) */}
@@ -51,7 +51,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
-    </StoreProvider>
+    </SupabaseProvider>
   );
 }
 

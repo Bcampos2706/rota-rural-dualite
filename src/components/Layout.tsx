@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Home, PlusCircle, MessageSquare, User, ShoppingBag, FileText, Bell, MapPin, ChevronDown, ClipboardList } from 'lucide-react';
-import { useStore } from '../context/MockStore'; // Updated import
+import { useStore } from '../context/SupabaseContext'; // Updated import
 import { cn } from '../lib/utils';
 
 export const Layout = () => {

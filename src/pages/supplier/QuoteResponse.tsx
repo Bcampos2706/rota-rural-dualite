@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useStore } from '../../context/MockStore'; // Updated import
+import { useStore } from '../../context/SupabaseContext'; // Updated import
 import { 
   ChevronLeft, 
   Upload, 

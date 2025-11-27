@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../../context/MockStore'; // Updated import
+import { useStore } from '../../context/SupabaseContext'; // Updated import
 import { useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, 

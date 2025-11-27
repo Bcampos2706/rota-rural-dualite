@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useStore } from '../../context/MockStore'; // Updated import
+import { useStore } from '../../context/SupabaseContext'; // Updated import
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -300,12 +300,12 @@ const StandardOrderCard = ({ quote, onClick }: { quote: QuoteRequest; onClick: (
 // --- Main Page ---
 
 export const MyQuotes = () => {
-  const { quotes } = useStore();
+  const { quotes, user } = useStore();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   // Filter quotes for the current buyer
-  const myQuotes = quotes.filter(q => q.buyerId === 'user-buyer');
+  const myQuotes = quotes.filter(q => q.buyerId === user?.id);
 
   // Stats Calculation
   const stats = useMemo(() => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore } from '../../context/MockStore'; // Updated import
+import { useStore } from '../../context/SupabaseContext'; // Updated import
 import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, 
@@ -27,14 +27,14 @@ import {
 import { formatCurrency, cn } from '../../lib/utils';
 
 export const SupplierDashboard = () => {
-  const { quotes } = useStore();
+  const { quotes, user } = useStore();
   const navigate = useNavigate();
 
-  // Mock Supplier Data
+  // Mock Supplier Data (Fallback if user data is missing)
   const supplierProfile = {
-    company: "AgroTop Insumos Ltda",
-    username: "João Silva",
-    email: "vendas@agrotop.com.br",
+    company: user?.company_name || "AgroTop Insumos Ltda",
+    username: user?.full_name || "João Silva",
+    email: user?.email || "vendas@agrotop.com.br",
     rating: 4.8
   };
 
@@ -42,7 +42,7 @@ export const SupplierDashboard = () => {
   const quickActions = [
     { label: 'Pedidos', icon: ClipboardList, color: 'text-blue-600', bg: 'bg-blue-50', path: '/supplier/orders' },
     { label: 'Promoções', icon: Tag, color: 'text-pink-600', bg: 'bg-pink-50', path: '/supplier/promotions' },
-    { label: 'Relatório', icon: BarChart3, color: 'text-purple-600', bg: 'bg-purple-50', path: '/supplier/reports' }, // Updated path
+    { label: 'Relatório', icon: BarChart3, color: 'text-purple-600', bg: 'bg-purple-50', path: '/supplier/reports' },
     { label: 'Grupos de usuário', icon: Users, color: 'text-orange-600', bg: 'bg-orange-50', path: '#' },
     { label: 'Cadastro de Produtos', icon: PlusSquare, color: 'text-emerald-600', bg: 'bg-emerald-50', path: '#' },
     { label: 'Financeiro', icon: DollarSign, color: 'text-yellow-600', bg: 'bg-yellow-50', path: '#' },
@@ -53,25 +53,25 @@ export const SupplierDashboard = () => {
   // 1. Disponíveis: Status 'open' E eu AINDA NÃO enviei proposta
   const availableQuotes = quotes.filter(q => 
     q.status === 'open' && 
-    !q.proposals.some(p => p.supplierId === 'user-supplier')
+    !q.proposals.some(p => p.supplierId === user?.id)
   );
 
   // 2. Aguardando Aprovação: Status 'open' E eu JÁ enviei proposta
   const awaitingApprovalQuotes = quotes.filter(q => 
     q.status === 'open' && 
-    q.proposals.some(p => p.supplierId === 'user-supplier')
+    q.proposals.some(p => p.supplierId === user?.id)
   );
 
   // 3. Em Aberto (Aceitos): Status 'closed' E minha proposta foi aceita
   const activeOrders = quotes.filter(q => 
     q.status === 'closed' &&
-    q.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'accepted')
+    q.proposals.some(p => p.supplierId === user?.id && p.status === 'accepted')
   );
 
   // 4. Finalizados: Status 'completed'
   const completedOrders = quotes.filter(q => 
     q.status === 'completed' &&
-    q.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'accepted')
+    q.proposals.some(p => p.supplierId === user?.id && p.status === 'accepted')
   );
 
   return (
@@ -211,7 +211,7 @@ export const SupplierDashboard = () => {
           ) : (
             <div className="space-y-3">
               {awaitingApprovalQuotes.slice(0, 3).map((quote) => {
-                const myProposal = quote.proposals.find(p => p.supplierId === 'user-supplier');
+                const myProposal = quote.proposals.find(p => p.supplierId === user?.id);
                 return (
                   <div 
                     key={quote.id}
@@ -257,7 +257,7 @@ export const SupplierDashboard = () => {
           ) : (
             <div className="space-y-3">
               {activeOrders.slice(0, 3).map((quote) => {
-                 const myProposal = quote.proposals.find(p => p.supplierId === 'user-supplier');
+                 const myProposal = quote.proposals.find(p => p.supplierId === user?.id);
                  
                  return (
                   <div 

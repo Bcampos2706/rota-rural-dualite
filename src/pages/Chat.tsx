@@ -3,20 +3,17 @@ import {
   Send, 
   ChevronLeft, 
   Search, 
-  MoreVertical, 
   Phone, 
   CheckCircle2, 
   Store,
   Package,
-  Clock,
   Check
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../context/MockStore';
-import { QuoteRequest, Proposal } from '../types';
+import { useStore } from '../context/SupabaseContext'; // Conectado ao Supabase
 import { cn, formatCurrency } from '../lib/utils';
 
-// Mock messages generator
+// Mock messages generator (ainda simulado pois não temos tabela de mensagens no momento, mas integrado ao fluxo real)
 const generateMockMessages = (supplierName: string) => [
   { id: 1, text: `Olá, recebi seu pedido. Podemos confirmar a entrega?`, sender: 'other', time: '10:00' },
   { id: 2, text: 'Bom dia! Sim, o endereço está correto.', sender: 'me', time: '10:05' },

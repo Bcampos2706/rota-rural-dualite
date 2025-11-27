@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../context/MockStore';
+import { useStore } from '../context/SupabaseContext'; // Conectado ao Supabase
 import { 
   User, 
   MapPin, 
@@ -12,7 +12,6 @@ import {
   Mail, 
   Phone, 
   ChevronRight,
-  Building2,
   Users,
   UserPlus,
   Camera,
@@ -22,29 +21,30 @@ import { cn } from '../lib/utils';
 
 export const Profile = () => {
   const navigate = useNavigate();
-  const { role, setRole } = useStore();
+  const { role, user, logout } = useStore();
 
   // Determina se é fornecedor ou produtor para exibir os dados corretos
   const isSupplier = role === 'supplier';
 
-  // Dados mockados para exibição dinâmica
+  // Dados dinâmicos do usuário logado
   const profileData = isSupplier ? {
-    company: "AgroTop Insumos Ltda",
-    username: "João Silva",
-    branch: "Matriz - Sorriso/MT",
+    company: user?.company_name || "Empresa",
+    username: user?.full_name || "Usuário",
+    branch: user?.branch || "Matriz",
     roleLabel: "Fornecedor",
-    email: "vendas@agrotop.com.br",
-    phone: "66 3544-0000",
-    initials: "AT"
+    email: user?.email || "",
+    phone: user?.phone || "",
+    initials: user?.company_name?.substring(0, 2).toUpperCase() || "EM"
   } : {
-    name: "BRUNO FERREIRA CAMPOS",
+    name: user?.full_name || "Produtor",
     roleLabel: "Produtor Rural",
-    email: "brunocamposinfra@gmail.com",
-    phone: "66 99721-7811",
-    initials: "BF"
+    email: user?.email || "",
+    phone: user?.phone || "",
+    initials: user?.full_name?.substring(0, 2).toUpperCase() || "PR"
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     navigate('/');
   };
 

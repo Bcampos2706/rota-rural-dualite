@@ -1,27 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../../context/MockStore'; // Updated import
+import { useStore } from '../../context/SupabaseContext'; // Conectado ao Supabase
 import { 
   ChevronLeft, 
-  Calendar, 
   Download, 
   DollarSign, 
   TrendingUp, 
-  TrendingDown, 
-  Users, 
   Clock, 
-  Package, 
-  AlertCircle, 
   CheckCircle2, 
   XCircle,
   RefreshCw,
-  BarChart3
+  BarChart3,
+  Users
 } from 'lucide-react';
 import { formatCurrency, cn } from '../../lib/utils';
 
 export const Reports = () => {
   const navigate = useNavigate();
-  const { quotes } = useStore();
+  const { quotes, user } = useStore();
   const [dateRange, setDateRange] = useState('this_month');
 
   // --- CÁLCULOS E MÉTRICAS ---
@@ -29,7 +25,7 @@ export const Reports = () => {
   const metrics = useMemo(() => {
     // Filtrar apenas propostas deste fornecedor
     const myProposals = quotes.flatMap(q => 
-      q.proposals.filter(p => p.supplierId === 'user-supplier').map(p => ({
+      q.proposals.filter(p => p.supplierId === user?.id).map(p => ({
         ...p,
         quoteStatus: q.status,
         buyerId: q.buyerId
@@ -77,7 +73,7 @@ export const Reports = () => {
       returnsCount,
       returnsValue
     };
-  }, [quotes]);
+  }, [quotes, user]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -250,22 +246,6 @@ export const Reports = () => {
             <p className="text-[10px] text-red-400 mt-1">Total: {formatCurrency(metrics.returnsValue)}</p>
           </div>
         </div>
-
-        {/* 4. Banner de Insight */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-4 text-white shadow-lg">
-          <div className="flex items-start gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
-              <AlertCircle size={20} />
-            </div>
-            <div>
-              <h4 className="font-bold text-sm mb-1">Oportunidade Identificada</h4>
-              <p className="text-xs text-indigo-100 leading-relaxed">
-                Você perdeu 3 cotações de "Sementes" por preço alto. Considere revisar sua margem para esta categoria.
-              </p>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
   );

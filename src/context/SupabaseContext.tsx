@@ -19,6 +19,13 @@ interface StoreContextType {
   addresses: Address[];
   promotions: Promotion[];
   isLoading: boolean;
+  
+  // Auth
+  login: (email: string, password?: string) => Promise<void>;
+  register: (userData: any) => Promise<void>;
+  logout: () => Promise<void>;
+
+  // Actions
   addQuote: (quote: any) => Promise<void>;
   addProposal: (quoteId: string, proposal: any) => Promise<void>;
   acceptProposal: (quoteId: string, proposalId: string) => Promise<void>;
@@ -46,18 +53,64 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
+      // 1. Tenta buscar na tabela de Produtores
+      let { data: producerData } = await supabase
+        .from('profile_produtor')
         .select('*')
         .eq('id', userId)
         .single();
-      
-      if (error) throw error;
-      if (data) {
-        setUser(data);
-        setRole(data.role as UserRole);
-        return data.role;
+
+      if (producerData) {
+        const userProfile: UserProfile = {
+            id: producerData.id,
+            email: producerData.email,
+            full_name: producerData.full_name,
+            role: 'producer',
+            company_name: producerData.farm_name, // Mapeia nome da fazenda
+            document: producerData.cpf_cnpj,
+            phone: producerData.phone,
+            address: producerData.address,
+            categories: producerData.categories
+        };
+        setUser(userProfile);
+        setRole('producer');
+        return 'producer';
       }
+
+      // 2. Se não achar, tenta buscar na tabela de Fornecedores
+      let { data: supplierData } = await supabase
+        .from('profile_fornecedor')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (supplierData) {
+        const userProfile: UserProfile = {
+            id: supplierData.id,
+            email: supplierData.email,
+            full_name: supplierData.full_name,
+            role: 'supplier',
+            company_name: supplierData.company_name,
+            document: supplierData.cnpj,
+            phone: supplierData.phone,
+            address: supplierData.address,
+            branch: supplierData.branch,
+            categories: supplierData.categories
+        };
+        setUser(userProfile);
+        setRole('supplier');
+        return 'supplier';
+      }
+      
+      // Fallback: Tenta tabela antiga 'profiles' se as novas falharem (compatibilidade)
+      const { data: oldProfile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (oldProfile) {
+         const appRole = (oldProfile.user_type === 'producer' ? 'producer' : oldProfile.role) as UserRole;
+         setUser({ ...oldProfile, role: appRole });
+         setRole(appRole);
+         return appRole;
+      }
+
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -66,24 +119,27 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchQuotes = async () => {
     try {
+      // Precisamos ajustar a query pois agora os nomes vêm de tabelas diferentes
+      // Por simplicidade, vamos buscar as cotações e depois enriquecer com os nomes se necessário
+      // Ou usar uma View no banco. Aqui vamos manter simples.
+      
       const { data: quotesData, error } = await supabase
         .from('quotes')
         .select(`
           *,
-          profiles:buyer_id (full_name),
-          proposals (
-            *,
-            profiles:supplier_id (full_name, company_name)
-          )
+          proposals (*)
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
+      // Para exibir nomes corretamente, idealmente faríamos joins, mas com tabelas separadas
+      // o Supabase requer Views ou queries manuais. Vamos usar placeholders ou dados do user atual.
+      
       const mappedQuotes: QuoteRequest[] = quotesData.map((q: any) => ({
         id: q.id,
         buyerId: q.buyer_id,
-        buyerName: q.profiles?.full_name || 'Usuário Desconhecido',
+        buyerName: q.buyer_name || 'Produtor Rural', // Fallback se não tiver join
         product: {
           id: q.product_id || 'unknown',
           name: q.product_name,
@@ -100,7 +156,7 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
           id: p.id,
           quoteId: p.quote_id,
           supplierId: p.supplier_id,
-          supplierName: p.profiles?.company_name || p.profiles?.full_name || 'Fornecedor',
+          supplierName: 'Fornecedor', // Será preenchido melhor se tivermos o ID
           price: p.price,
           deliveryDate: p.delivery_date,
           notes: p.notes,
@@ -133,7 +189,7 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase
         .from('promotions')
-        .select('*, profiles:supplier_id(company_name)')
+        .select('*')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -141,7 +197,7 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
       const mappedPromos = data?.map((p: any) => ({
         id: p.id,
         supplierId: p.supplier_id,
-        supplierName: p.profiles?.company_name || 'Fornecedor',
+        supplierName: 'Fornecedor Parceiro', // Simplificado
         title: p.title,
         description: p.description,
         image: p.image_url,
@@ -202,7 +258,55 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // --- Actions ---
+  // --- Auth Methods ---
+
+  const login = async (email: string, password?: string) => {
+    if (!password) throw new Error("Senha é obrigatória");
+    const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+    });
+    if (error) throw error;
+  };
+
+  const register = async (userData: any) => {
+    // Envia os dados brutos para o Supabase Auth.
+    // O Trigger no banco de dados vai ler 'role' e decidir se salva em profile_produtor ou profile_fornecedor
+    
+    const { error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+            data: {
+                role: userData.role, // 'producer' ou 'supplier'
+                full_name: userData.fullName,
+                document: userData.cpfCnpj || userData.companyCnpj,
+                phone: userData.phone,
+                whatsapp: userData.whatsapp,
+                address: userData.address,
+                
+                // Producer specific
+                birthDate: userData.birthDate,
+                company_name: userData.companyName || userData.farmName, // Farm name goes here for producer
+                
+                // Supplier specific
+                branch: userData.branch,
+                
+                categories: userData.selectedCategories
+            }
+        }
+    });
+
+    if (error) throw error;
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setRole('buyer');
+  };
+
+  // --- Data Actions ---
 
   const addQuote = async (quoteData: any) => {
     if (!user) return;
@@ -210,6 +314,7 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { error } = await supabase.from('quotes').insert({
         buyer_id: user.id,
+        buyer_name: user.full_name, // Salvando nome denormalizado para facilitar exibição
         product_name: quoteData.product.name,
         category: quoteData.product.category,
         unit: quoteData.product.unit,
@@ -350,7 +455,6 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
   const addAddress = async (address: Omit<Address, 'id' | 'user_id'>) => {
     if (!user) return;
     try {
-      // Se for o primeiro endereço ou marcado como padrão, remover padrão dos outros
       if (address.is_default) {
         await supabase
           .from('addresses')
@@ -384,13 +488,11 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
   const setDefaultAddress = async (id: string) => {
     if (!user) return;
     try {
-      // Remove default from all
       await supabase
         .from('addresses')
         .update({ is_default: false })
         .eq('user_id', user.id);
 
-      // Set new default
       const { error } = await supabase
         .from('addresses')
         .update({ is_default: true })
@@ -413,6 +515,9 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
       addresses, 
       promotions,
       isLoading,
+      login,
+      register,
+      logout,
       addQuote, 
       addProposal, 
       acceptProposal, 
@@ -420,8 +525,8 @@ export const SupabaseProvider = ({ children }: { children: ReactNode }) => {
       addPromotion, 
       togglePromotionStatus, 
       deletePromotion,
-      addAddress,
-      deleteAddress,
+      addAddress, 
+      deleteAddress, 
       setDefaultAddress,
       refreshData
     }}>

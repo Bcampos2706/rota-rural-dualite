@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../../context/MockStore';
+import { useStore } from '../../context/SupabaseContext'; // Conectado ao Supabase
 import { 
   X, 
   MapPin, 
-  Edit2, 
   Trash2, 
   Check, 
   Plus,

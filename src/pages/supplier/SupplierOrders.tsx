@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useStore } from '../../context/MockStore'; // Updated import
+import { useStore } from '../../context/SupabaseContext'; // Updated import
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -13,7 +13,7 @@ import { cn, formatCurrency } from '../../lib/utils';
 type FilterType = 'all' | 'available' | 'sent' | 'active' | 'completed' | 'rejected';
 
 export const SupplierOrders = () => {
-  const { quotes } = useStore();
+  const { quotes, user } = useStore();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,21 +21,21 @@ export const SupplierOrders = () => {
   // --- Filtering Logic ---
   
   // Disponíveis: Aberto e SEM proposta minha
-  const availableQuotes = quotes.filter(q => q.status === 'open' && !q.proposals.some(p => p.supplierId === 'user-supplier'));
+  const availableQuotes = quotes.filter(q => q.status === 'open' && !q.proposals.some(p => p.supplierId === user?.id));
   
   // Aguardando: Aberto e COM proposta minha
-  const sentQuotes = quotes.filter(q => q.status === 'open' && q.proposals.some(p => p.supplierId === 'user-supplier'));
+  const sentQuotes = quotes.filter(q => q.status === 'open' && q.proposals.some(p => p.supplierId === user?.id));
   
   // Aceitos: Fechado e minha proposta ACEITA
-  const activeQuotes = quotes.filter(q => q.status === 'closed' && q.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'accepted'));
+  const activeQuotes = quotes.filter(q => q.status === 'closed' && q.proposals.some(p => p.supplierId === user?.id && p.status === 'accepted'));
   
   // Finalizados: Completado e minha proposta ACEITA
-  const completedQuotes = quotes.filter(q => q.status === 'completed' && q.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'accepted'));
+  const completedQuotes = quotes.filter(q => q.status === 'completed' && q.proposals.some(p => p.supplierId === user?.id && p.status === 'accepted'));
 
   // Rejeitados: Fechado e minha proposta REJEITADA (ou seja, o cliente fechou com outro ou rejeitou explicitamente)
   const rejectedQuotes = quotes.filter(q => 
     (q.status === 'closed' || q.status === 'completed') && 
-    q.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'rejected')
+    q.proposals.some(p => p.supplierId === user?.id && p.status === 'rejected')
   );
 
   const getFilteredQuotes = () => {
@@ -120,13 +120,13 @@ export const SupplierOrders = () => {
         ) : (
           filteredList.map(quote => {
             // Determine card style based on status logic
-            const isAvailable = quote.status === 'open' && !quote.proposals.some(p => p.supplierId === 'user-supplier');
-            const isSent = quote.status === 'open' && quote.proposals.some(p => p.supplierId === 'user-supplier');
-            const isActive = quote.status === 'closed' && quote.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'accepted');
-            const isCompleted = quote.status === 'completed' && quote.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'accepted');
-            const isRejected = (quote.status === 'closed' || quote.status === 'completed') && quote.proposals.some(p => p.supplierId === 'user-supplier' && p.status === 'rejected');
+            const isAvailable = quote.status === 'open' && !quote.proposals.some(p => p.supplierId === user?.id);
+            const isSent = quote.status === 'open' && quote.proposals.some(p => p.supplierId === user?.id);
+            const isActive = quote.status === 'closed' && quote.proposals.some(p => p.supplierId === user?.id && p.status === 'accepted');
+            const isCompleted = quote.status === 'completed' && quote.proposals.some(p => p.supplierId === user?.id && p.status === 'accepted');
+            const isRejected = (quote.status === 'closed' || quote.status === 'completed') && quote.proposals.some(p => p.supplierId === user?.id && p.status === 'rejected');
 
-            const myProposal = quote.proposals.find(p => p.supplierId === 'user-supplier');
+            const myProposal = quote.proposals.find(p => p.supplierId === user?.id);
 
             return (
               <div 
